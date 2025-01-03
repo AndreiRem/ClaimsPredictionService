@@ -1,0 +1,9 @@
+fastapi
+pydantic
+typing
+pandas
+scikit-learn
+numpy
+seaborn
+matplotlib
+lightgbm
