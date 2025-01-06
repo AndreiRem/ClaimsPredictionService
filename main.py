@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, List
 import math
 import pickle
 import numpy as np
@@ -27,6 +27,11 @@ async def load_variables():
     except FileNotFoundError:
         print("File not found.")
 
+
+class PredictionResponse(BaseModel):
+    predicted_class: int  # Predicted class (e.g., 0 or 1)
+    probability: List[float]  # List of probabilities for each class
+    
 
 class InsuranceData(BaseModel):
     Agenturname: Literal['CBH', 'CWT', 'JZI', 'KML', 'EPX', 'C2B', 'JWT', 'RAB', 'SSI',
@@ -128,12 +133,13 @@ def transform_data(data: InsuranceData):
                        'RueckerstattungsprozentsatzNachAgenturname',
                        'ReisezielLeistungseintrittRatio',
                        'GewichtetReisezielLeistungseintrittRatio']
+    
     model_input = np.array([[transformed[feature] for feature in feature_order]])
     return model_input
 
 
-@app.post("/process-insurance/")
-async def process_insurance(data: InsuranceData):
+@app.post("/predict/", response_model=PredictionResponse)
+async def predict(data: InsuranceData):
     """
     Endpoint to process insurance data. Validates and processes the input.
     """
@@ -142,14 +148,12 @@ async def process_insurance(data: InsuranceData):
     if lgb_classifier is None:
         raise HTTPException(status_code=500, detail="Model is not loaded. Ensure the startup event executed properly.")
 
-    print('###'*10)
     X = transform_data(data)
 
-    print(X.shape)
     prediction = lgb_classifier.predict(X)
     prediction_proba = lgb_classifier.predict_proba(X)
-
-    return {
-        "predicted_class": int(prediction[0]),
-        "probability": prediction_proba[0]
-    }
+    
+    return PredictionResponse(
+            predicted_class=int(prediction[0]),
+            probability=[float(p) for p in prediction_proba[0]]
+    )
